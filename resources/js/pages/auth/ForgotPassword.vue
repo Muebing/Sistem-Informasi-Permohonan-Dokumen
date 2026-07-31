@@ -30,6 +30,13 @@ async function submit() {
 </script>
 
 <template>
+    <div class="mb-6 text-center">
+        <h1 class="text-2xl font-bold tracking-tight">Lupa kata sandi</h1>
+        <p class="mt-2 text-sm text-muted-foreground">
+            Masukkan email Anda untuk menerima tautan reset.
+        </p>
+    </div>
+
     <Alert v-if="submitted" class="mb-4">
         <AlertDescription>
             Jika email terdaftar, tautan untuk mengatur ulang kata sandi akan

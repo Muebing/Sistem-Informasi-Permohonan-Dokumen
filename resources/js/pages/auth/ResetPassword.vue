@@ -42,6 +42,13 @@ async function submit() {
 </script>
 
 <template>
+    <div class="mb-6 text-center">
+        <h1 class="text-2xl font-bold tracking-tight">Atur ulang kata sandi</h1>
+        <p class="mt-2 text-sm text-muted-foreground">
+            Buat kata sandi baru untuk akun Anda.
+        </p>
+    </div>
+
     <Alert v-if="submitted" class="mb-4">
         <AlertDescription>
             Kata sandi Anda telah diperbarui. Silakan masuk dengan kata sandi

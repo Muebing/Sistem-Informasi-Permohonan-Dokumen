@@ -40,6 +40,13 @@ async function submit() {
 </script>
 
 <template>
+    <div class="mb-6 text-center">
+        <h1 class="text-2xl font-bold tracking-tight">Daftar</h1>
+        <p class="mt-2 text-sm text-muted-foreground">
+            Buat akun untuk mulai mengajukan proyek.
+        </p>
+    </div>
+
     <Card>
         <CardContent class="pt-6">
             <form class="space-y-4" @submit.prevent="submit">

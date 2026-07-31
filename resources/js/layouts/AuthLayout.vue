@@ -2,12 +2,6 @@
 import { RouterLink, RouterView } from 'vue-router';
 import Logo from '@/components/Logo.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
-
-defineProps<{
-    title: string;
-    description?: string;
-    footer?: string;
-}>();
 </script>
 
 <template>
@@ -21,23 +15,12 @@ defineProps<{
 
         <main class="flex flex-1 items-center justify-center px-4 pb-12">
             <div class="w-full max-w-md">
-                <div class="mb-6 text-center">
-                    <h1 class="text-2xl font-bold tracking-tight">
-                        {{ title }}
-                    </h1>
-                    <p
-                        v-if="description"
-                        class="mt-2 text-sm text-muted-foreground"
-                    >
-                        {{ description }}
-                    </p>
-                </div>
                 <RouterView />
             </div>
         </main>
 
         <footer class="pb-6 text-center text-xs text-muted-foreground">
-            {{ footer ?? '© 2026 SIPERDO. Semua hak dilindungi.' }}
+            © 2026 SIPERDO. Semua hak dilindungi.
         </footer>
     </div>
 </template>

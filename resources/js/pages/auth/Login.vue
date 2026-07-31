@@ -40,6 +40,13 @@ async function submit() {
 </script>
 
 <template>
+    <div class="mb-6 text-center">
+        <h1 class="text-2xl font-bold tracking-tight">Masuk</h1>
+        <p class="mt-2 text-sm text-muted-foreground">
+            Masuk ke akun SIPERDO Anda.
+        </p>
+    </div>
+
     <Card>
         <CardContent class="pt-6">
             <form class="space-y-4" @submit.prevent="submit">
