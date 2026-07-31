@@ -1,0 +1,100 @@
+<?php
+
+namespace App\Policies;
+
+use App\Enums\ProjectStatus;
+use App\Models\Project;
+use App\Models\User;
+
+class ProjectPolicy
+{
+    /**
+     * Any authenticated user may list projects (results are scoped by role).
+     */
+    public function viewAny(User $user): bool
+    {
+        return true;
+    }
+
+    /**
+     * The owner, reviewers and admins may view a project.
+     */
+    public function view(User $user, Project $project): bool
+    {
+        return $project->applicant_id === $user->id
+            || $user->hasAnyRole(['reviewer', 'admin']);
+    }
+
+    /**
+     * Only applicants (or admins) may create projects.
+     */
+    public function create(User $user): bool
+    {
+        return $user->can('projects.create');
+    }
+
+    /**
+     * Only the owner may edit, and only while the project is a draft.
+     */
+    public function update(User $user, Project $project): bool
+    {
+        return $user->can('projects.update')
+            && $project->applicant_id === $user->id
+            && $project->status === ProjectStatus::Draft;
+    }
+
+    /**
+     * Only the owner may delete, and only while the project is a draft.
+     */
+    public function delete(User $user, Project $project): bool
+    {
+        return $user->can('projects.delete')
+            && $project->applicant_id === $user->id
+            && $project->status === ProjectStatus::Draft;
+    }
+
+    /**
+     * The owner may submit from draft or revision.
+     */
+    public function submit(User $user, Project $project): bool
+    {
+        return $user->can('projects.submit')
+            && $project->applicant_id === $user->id
+            && in_array($project->status, ProjectStatus::submittableStatuses(), true);
+    }
+
+    /**
+     * The owner may upload documents while in draft or revision.
+     */
+    public function uploadDocument(User $user, Project $project): bool
+    {
+        return $user->can('documents.upload')
+            && $project->applicant_id === $user->id
+            && in_array($project->status, [ProjectStatus::Draft, ProjectStatus::Revision], true);
+    }
+
+    /**
+     * The owner may delete documents while in draft or revision.
+     */
+    public function deleteDocument(User $user, Project $project): bool
+    {
+        return $this->uploadDocument($user, $project);
+    }
+
+    /**
+     * Only reviewers and admins may start a review.
+     */
+    public function startReview(User $user, Project $project): bool
+    {
+        return $user->hasAnyRole(['reviewer', 'admin'])
+            && in_array($project->status, [ProjectStatus::Submitted, ProjectStatus::Revision], true);
+    }
+
+    /**
+     * Only reviewers and admins may export project data.
+     */
+    public function export(User $user): bool
+    {
+        return $user->hasAnyRole(['reviewer', 'admin']);
+    }
+}
