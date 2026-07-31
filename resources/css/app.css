@@ -5,6 +5,26 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
+/* Status colors returned by the API (StatusPresenter) — safelist so Tailwind emits them. */
+@source inline('bg-slate-100');
+@source inline('text-slate-700');
+@source inline('bg-slate-500');
+@source inline('bg-blue-50');
+@source inline('text-blue-700');
+@source inline('bg-blue-500');
+@source inline('bg-indigo-50');
+@source inline('text-indigo-700');
+@source inline('bg-indigo-500');
+@source inline('bg-amber-50');
+@source inline('text-amber-700');
+@source inline('bg-amber-500');
+@source inline('bg-emerald-50');
+@source inline('text-emerald-700');
+@source inline('bg-emerald-500');
+@source inline('bg-rose-50');
+@source inline('text-rose-700');
+@source inline('bg-rose-500');
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
