@@ -18,7 +18,7 @@ class ResetPassword extends BaseResetPassword
     protected function resetUrl($notifiable): string
     {
         return rtrim((string) config('app.frontend_url'), '/')
-            .'/reset-password?token='.$this->token
+            .'/#/reset-password?token='.$this->token
             .'&email='.urlencode((string) $notifiable->getEmailForPasswordReset());
     }
 }

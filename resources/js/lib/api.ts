@@ -27,7 +27,7 @@ api.interceptors.response.use(
 
             if (!url.startsWith('/auth/')) {
                 localStorage.removeItem(TOKEN_KEY);
-                window.location.assign('/login');
+                window.location.assign('#/login');
             }
         }
 
