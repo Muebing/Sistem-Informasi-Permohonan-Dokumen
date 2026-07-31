@@ -20,7 +20,6 @@ export const useAuthStore = defineStore('auth', {
         isApplicant: (state) =>
             state.user?.roles.includes('applicant') ?? false,
         isReviewer: (state) => state.user?.roles.includes('reviewer') ?? false,
-        isAdmin: (state) => state.user?.roles.includes('admin') ?? false,
     },
     actions: {
         async fetchMe(): Promise<User> {

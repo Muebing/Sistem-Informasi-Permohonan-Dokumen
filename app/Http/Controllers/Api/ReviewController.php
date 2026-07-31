@@ -45,7 +45,7 @@ class ReviewController extends Controller
         $pending = Project::query()
             ->with(['applicant:id,name', 'documents:id,project_id,original_name,size,created_at'])
             ->withCount('documents')
-            ->whereIn('status', ['submitted', 'revision', 'under_review'])
+            ->whereIn('status', ['submitted', 'under_review'])
             ->latest('submitted_at')
             ->limit(100)
             ->get();

@@ -78,7 +78,10 @@ const canUpload = computed(
             project.value?.status.value === 'revision'),
 );
 const canEdit = computed(
-    () => isOwner.value && project.value?.status.value === 'draft',
+    () =>
+        isOwner.value &&
+        (project.value?.status.value === 'draft' ||
+            project.value?.status.value === 'revision'),
 );
 const canSubmit = computed(
     () =>
@@ -90,10 +93,7 @@ const canDelete = computed(
     () => isOwner.value && project.value?.status.value === 'draft',
 );
 const canStartReview = computed(
-    () =>
-        auth.isReviewer &&
-        (project.value?.status.value === 'submitted' ||
-            project.value?.status.value === 'revision'),
+    () => auth.isReviewer && project.value?.status.value === 'submitted',
 );
 const canDecide = computed(
     () => auth.isReviewer && project.value?.status.value === 'under_review',
@@ -627,6 +627,7 @@ onMounted(load);
                             v-model="reviewNotes"
                             rows="4"
                             placeholder="Catatan untuk pemohon..."
+                            required
                         />
                     </div>
                 </form>
@@ -637,7 +638,7 @@ onMounted(load);
                     <Button
                         type="submit"
                         form="review-form"
-                        :disabled="deciding"
+                        :disabled="deciding || reviewNotes.trim() === ''"
                     >
                         <Spinner v-if="deciding" />
                         Simpan keputusan

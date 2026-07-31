@@ -142,9 +142,9 @@ class ProjectTest extends TestCase
         $this->assertEquals(3, $response->json('meta.total'));
     }
 
-    public function test_admin_sees_all_projects(): void
+    public function test_reviewer_sees_all_projects(): void
     {
-        $this->admin();
+        $this->reviewer();
         Project::factory()->count(5)->create();
 
         $response = $this->getJson('/api/v1/projects')->assertOk();
@@ -154,7 +154,7 @@ class ProjectTest extends TestCase
 
     public function test_project_listing_can_be_searched_and_filtered(): void
     {
-        $this->admin();
+        $this->reviewer();
         Project::factory()->create([
             'project_name' => 'Permohonan Sertifikat A',
             'status' => ProjectStatus::Approved,
@@ -173,7 +173,7 @@ class ProjectTest extends TestCase
 
     public function test_project_listing_can_be_sorted_by_oldest(): void
     {
-        $this->admin();
+        $this->reviewer();
         $oldest = Project::factory()->create(['created_at' => now()->subDays(10)]);
         Project::factory()->create(['created_at' => now()]);
 

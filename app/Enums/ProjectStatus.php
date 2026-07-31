@@ -54,12 +54,16 @@ enum ProjectStatus: string
     }
 
     /**
-     * Statuses that are awaiting a reviewer decision.
+     * Statuses in which a reviewer may record a decision.
+     *
+     * Per the business process a project must be actively under review;
+     * while in "submitted" the reviewer must first start the review, and
+     * while in "revision" the project is back with the applicant.
      *
      * @return array<int, ProjectStatus>
      */
     public static function pendingReviewStatuses(): array
     {
-        return [self::Submitted, self::Revision, self::UnderReview];
+        return [self::UnderReview];
     }
 }

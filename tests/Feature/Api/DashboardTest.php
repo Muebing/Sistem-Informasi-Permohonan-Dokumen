@@ -40,9 +40,9 @@ class DashboardTest extends TestCase
         $this->assertArrayHasKey('recent_reviews', $dashboard);
     }
 
-    public function test_admin_sees_reviewer_dashboard(): void
+    public function test_reviewer_sees_reviewer_dashboard(): void
     {
-        $this->admin();
+        $this->reviewer();
 
         $this->getJson('/api/v1/dashboard')
             ->assertOk()

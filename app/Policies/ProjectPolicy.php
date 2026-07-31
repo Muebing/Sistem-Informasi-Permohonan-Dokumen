@@ -17,16 +17,16 @@ class ProjectPolicy
     }
 
     /**
-     * The owner, reviewers and admins may view a project.
+     * The owner and reviewers may view a project.
      */
     public function view(User $user, Project $project): bool
     {
         return $project->applicant_id === $user->id
-            || $user->hasAnyRole(['reviewer', 'admin']);
+            || $user->hasRole('reviewer');
     }
 
     /**
-     * Only applicants (or admins) may create projects.
+     * Only applicants may create projects.
      */
     public function create(User $user): bool
     {
@@ -34,13 +34,15 @@ class ProjectPolicy
     }
 
     /**
-     * Only the owner may edit, and only while the project is a draft.
+     * Only the owner may edit, while the project is a draft or back with the
+     * applicant in revision (per the workflow, revision lets the applicant
+     * update the project and re-upload documents).
      */
     public function update(User $user, Project $project): bool
     {
         return $user->can('projects.update')
             && $project->applicant_id === $user->id
-            && $project->status === ProjectStatus::Draft;
+            && in_array($project->status, [ProjectStatus::Draft, ProjectStatus::Revision], true);
     }
 
     /**
@@ -82,19 +84,21 @@ class ProjectPolicy
     }
 
     /**
-     * Only reviewers and admins may start a review.
+     * Only reviewers may start a review, and only while the project
+     * is freshly submitted (the revision loop returns to under review directly
+     * on resubmission).
      */
     public function startReview(User $user, Project $project): bool
     {
-        return $user->hasAnyRole(['reviewer', 'admin'])
-            && in_array($project->status, [ProjectStatus::Submitted, ProjectStatus::Revision], true);
+        return $user->hasRole('reviewer')
+            && $project->status === ProjectStatus::Submitted;
     }
 
     /**
-     * Only reviewers and admins may export project data.
+     * Only reviewers may export project data.
      */
     public function export(User $user): bool
     {
-        return $user->hasAnyRole(['reviewer', 'admin']);
+        return $user->hasRole('reviewer');
     }
 }

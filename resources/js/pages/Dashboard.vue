@@ -130,18 +130,35 @@ const chartOptions = computed<ApexOptions>(() => ({
         axisBorder: { show: false },
         axisTicks: { show: false },
         labels: {
-            formatter: (value: string) => {
-                const [year, month] = value.split('-');
+            formatter: (value: string | number) => {
+                const [year, month] = String(value ?? '').split('-');
 
-                return `${month}/${year.slice(2)}`;
+                return year && month
+                    ? `${month}/${year.slice(2)}`
+                    : String(value ?? '');
             },
         },
     },
     yaxis: {
-        labels: { formatter: (value: number) => String(Math.trunc(value)) },
+        labels: {
+            formatter: (value?: number) => {
+                if (value == null || Number.isNaN(value)) {
+                    return '';
+                }
+
+                return String(Math.trunc(value));
+            },
+        },
     },
     grid: { borderColor: 'var(--border)' },
-    tooltip: { y: { formatter: (value: number) => `${value} proyek` } },
+    tooltip: {
+        y: {
+            formatter: (value?: number) =>
+                value == null
+                    ? ''
+                    : `${value} ${isApplicant.value ? 'proyek' : 'review'}`,
+        },
+    },
 }));
 
 const chartSeries = computed(() => [

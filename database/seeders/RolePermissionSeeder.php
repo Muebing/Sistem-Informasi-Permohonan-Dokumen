@@ -51,7 +51,6 @@ class RolePermissionSeeder extends Seeder
                 'reviews.create',
                 'dashboard.view',
             ],
-            'admin' => $permissions,
         ];
 
         foreach ($roles as $name => $rolePermissions) {

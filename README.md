@@ -10,13 +10,13 @@
 
 - **Otentikasi**: register, login, logout, profil, ganti kata sandi, lupa/reset kata sandi (token dikirim via email dengan tautan ke SPA).
 - **Manajemen permohonan**: CRUD proyek/permohonan, unggah dokumen (PDF/DOC/DOCX, maks. 5 MB), submit untuk direview.
-- **Alur persetujuan**: `draft → submitted → under_review → revision → approved/rejected`, lengkap dengan jejak log persetujuan dan riwayat aktivitas.
-- **Peran**: `applicant` (pemohon), `reviewer` (peninjau), `admin`.
+- **Alur persetujuan**: `draft → submitted → under_review → approved/rejected/revision`, dengan putaran revisi yang kembali ke `under_review`, lengkap dengan jejak log persetujuan dan riwayat aktivitas.
+- **Peran**: `applicant` (pemohon), `reviewer` (penilai).
 - **Dashboard**: ringkasan statistik, seri 12 bulan, dan aktivitas terbaru (per peran).
 - **Ekspor**: Excel (semua proyek) dan PDF (daftar proyek / detail proyek).
 - **Pemberitahuan email**: hasil review dikirim ke pemohon.
 - **Pemrosesan dokumen asinkron**: kalkulasi checksum SHA-256 lewat job antrean.
-- **Demo data**: 10.000 proyek, 1.000 pemohon, 1.000 peninjau.
+- **Demo data**: 10.000 proyek, 1.000 pemohon, 1.000 penilai.
 
 ---
 
@@ -59,7 +59,7 @@ routes/api.php                       # Seluruh endpoint v1
 database/
 ├── factories/                       # User, Project, ProjectDocument
 ├── migrations/
-└── seeders/                         # RolePermission, AdminUser, DemoData
+└── seeders/                         # RolePermission, DemoData
 tests/Feature/Api/                   # Feature test per modul
 ```
 
@@ -98,7 +98,7 @@ php artisan key:generate
 # 4. Buat database
 createdb siperdo
 
-# 5. Migrasi + seeder (peran, admin, demo data)
+# 5. Migrasi + seeder (peran & data demo)
 php artisan migrate --seed
 
 # 6. (Opsional) Jalankan worker antrean untuk job dokumen & email
@@ -124,11 +124,10 @@ composer ci:check   # lint JS + format + types + composer test (dipakai CI)
 
 | Peran    | Email              | Password   |
 | -------- | ------------------ | ---------- |
-| Admin    | `admin@siperdo.test` | `password` |
 | Pemohon  | dihasilkan dari demo data | `password` |
-| Peninjau | dihasilkan dari demo data | `password` |
+| Penilai  | dihasilkan dari demo data | `password` |
 
-Seeder `DemoDataSeeder` membuat 1.000 pemohon dan 1.000 peninjau (email pola `*@example.org`, kata sandi `password`). Contoh peninjau: `psaragih@example.org` / `password`.
+Seeder `DemoDataSeeder` membuat 1.000 pemohon dan 1.000 penilai (email pola `*@example.org`, kata sandi `password`). Contoh penilai: `psaragih@example.org` / `password`.
 
 ---
 
@@ -192,7 +191,7 @@ Otentikasi memakai **Bearer token**. Login/register mengembalikan `token`; kirim
 | Method | Endpoint      | Deskripsi                                                       |
 | ------ | ------------- | --------------------------------------------------------------- |
 | GET    | `/reviews`    | Reviewer: antrean pending + riwayat. Pemohon: review proyeknya  |
-| POST   | `/reviews`    | Beri keputusan `approved` / `rejected` / `revision` + `notes`   |
+| POST   | `/reviews`    | Keputusan `approved` / `rejected` / `revision` (wajib `notes`), hanya saat proyek `under_review` |
 | GET    | `/dashboard`  | Ringkasan statistik, seri bulanan, aktivitas terbaru            |
 | GET    | `/references?type=applicants\|reviewers` | Opsi daftar untuk filter                        |
 
@@ -200,7 +199,7 @@ Otentikasi memakai **Bearer token**. Login/register mengembalikan `token`; kirim
 
 | Method | Endpoint                           | Deskripsi                                    |
 | ------ | ---------------------------------- | -------------------------------------------- |
-| GET    | `/projects/export/excel`           | Semua proyek dalam XLSX (reviewer/admin)     |
+| GET    | `/projects/export/excel`           | Semua proyek dalam XLSX (reviewer)          |
 | GET    | `/projects/export/pdf`             | Daftar proyek dalam PDF, maks. 500 baris     |
 | GET    | `/projects/{project}/pdf`          | Detail satu proyek dalam PDF (pemilik/role)  |
 
@@ -305,35 +304,45 @@ Relasi kunci:
 
 ```
 Draft ──submit──▶ Submitted ──start-review──▶ Under Review
-  ▲                  │                            │
-  │                  ▼                            ▼
-  └──────────revision◀────── keputusan ──► Approved / Rejected
+                                                 │
+                        ┌────────────────────────┼────────────────────────┐
+                        ▼                        ▼                        ▼
+                    Approved                Rejected                  Revision
+                 (log "publish")                                        │
+                            ▲                          edit + unggah ulang │
+                            │                                            ▼
+                          Final                                    (pemohon) submit ulang
+                                                                        │
+                                                                        ▼
+                                                               Under Review (lagi)
 ```
 
 Aturan utama:
 
-1. **Submit** hanya boleh oleh pemilik dan wajib memiliki minimal satu dokumen. Bisa dilakukan dari status `draft` atau `revision`.
-2. **Start review** hanya oleh `reviewer`/`admin`, dari status `submitted`/`revision`.
-3. **Keputusan** (`approved`/`rejected`/`revision`) hanya oleh `reviewer`/`admin`, pada proyek yang sudah pernah disubmit.
-4. Setiap transisi tercatat di `approval_logs`; keputusan review juga mengirim email ke pemohon.
-5. Pemohon hanya melihat/berinteraksi dengan proyek miliknya; `reviewer`/`admin` melihat semua.
+1. **Submit** hanya oleh pemilik dan wajib memiliki minimal satu dokumen. Dari `draft` → `submitted`; submit ulang dari `revision` → langsung `under_review` (memasuki siklus review kembali).
+2. **Start review** hanya oleh `reviewer`, dan hanya dari status `submitted` → `under_review`.
+3. **Keputusan** (`approved`/`rejected`/`revision`) hanya oleh `reviewer`, dan hanya saat proyek sedang `under_review`. `notes` wajib diisi.
+4. Saat **Approved**, selain log `approve` juga dicatat log `publish` (pengesahan dokumen). `Approved` dan `Rejected` bersifat final.
+5. Saat **Revision**, pemohon dapat mengubah data dan mengunggah ulang dokumen, lalu submit ulang ke `under_review`.
+6. Setiap transisi tercatat di `approval_logs`; pengajuan mengirim email ke `reviewer` (`ProjectSubmittedNotification`), sedangkan keputusan mengirim email ke pemohon (`ReviewOutcomeNotification`).
+7. Pemohon hanya melihat/berinteraksi dengan proyek miliknya; `reviewer` melihat semua.
 
 ---
 
 ## Peran & Izin
 
-| Permission         | Applicant | Reviewer | Admin |
-| ------------------ | :-------: | :------: | :---: |
-| `projects.view`    | ✅        | ✅       | ✅    |
-| `projects.create`  | ✅        | –        | ✅    |
-| `projects.update`  | ✅        | –        | ✅    |
-| `projects.delete`  | ✅        | –        | ✅    |
-| `projects.submit`  | ✅        | –        | ✅    |
-| `projects.export`  | –         | ✅       | ✅    |
-| `documents.upload` | ✅        | –        | ✅    |
-| `reviews.view`     | ✅        | ✅       | ✅    |
-| `reviews.create`   | –         | ✅       | ✅    |
-| `dashboard.view`   | ✅        | ✅       | ✅    |
+| Permission         | Applicant | Reviewer |
+| ------------------ | :-------: | :------: |
+| `projects.view`    | ✅        | ✅       |
+| `projects.create`  | ✅        | –        |
+| `projects.update`  | ✅        | –        |
+| `projects.delete`  | ✅        | –        |
+| `projects.submit`  | ✅        | –        |
+| `projects.export`  | –         | ✅       |
+| `documents.upload` | ✅        | –        |
+| `reviews.view`     | ✅        | ✅       |
+| `reviews.create`   | –         | ✅       |
+| `dashboard.view`   | ✅        | ✅       |
 
 Otorisasi yang lebih halus (kepemilikan, status) diatur melalui `Policies` (`ProjectPolicy`, `ReviewPolicy`).
 

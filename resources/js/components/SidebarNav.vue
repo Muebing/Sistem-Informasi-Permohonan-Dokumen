@@ -44,14 +44,14 @@ const links: NavLink[] = [
         href: '/projects',
         name: 'projects.index',
         icon: FolderKanban,
-        roles: ['applicant', 'admin'],
+        roles: ['applicant'],
     },
     {
         title: 'Review',
         href: '/reviews',
         name: 'reviews.index',
         icon: ClipboardCheck,
-        roles: ['reviewer', 'admin'],
+        roles: ['reviewer'],
     },
     {
         title: 'Riwayat',

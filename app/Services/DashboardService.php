@@ -30,7 +30,7 @@ class DashboardService
     }
 
     /**
-     * Summary for reviewers/admins: global counts, monthly reviews, recent reviews.
+     * Summary for reviewers: global counts, monthly reviews, recent reviews.
      *
      * @return array<string, mixed>
      */
@@ -73,7 +73,7 @@ class DashboardService
             ->get()
             ->map(fn (ActivityLog $log) => [
                 'activity' => $log->activity,
-                'created_at' => $log->created_at,
+                'created_at' => $log->created_at->toIso8601String(),
                 'project' => $log->project ? [
                     'id' => $log->project->id,
                     'project_code' => $log->project->project_code,
@@ -127,7 +127,7 @@ class DashboardService
             ->map(fn (Review $review) => [
                 'status' => $review->status->value,
                 'notes' => $review->notes,
-                'created_at' => $review->created_at,
+                'created_at' => $review->created_at->toIso8601String(),
                 'reviewer' => [
                     'id' => $review->reviewer?->id,
                     'name' => $review->reviewer?->name,

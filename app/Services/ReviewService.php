@@ -18,10 +18,14 @@ class ReviewService
     ) {}
 
     /**
-     * Claim a project for review: submitted/revision -> under_review.
+     * Claim a freshly submitted project for review: submitted -> under_review.
      */
     public function startReview(User $reviewer, Project $project): Project
     {
+        if ($project->status !== ProjectStatus::Submitted) {
+            throw new InvalidArgumentException('Only submitted projects can be claimed for review.');
+        }
+
         $previous = $project->status;
 
         $project->update(['status' => ProjectStatus::UnderReview]);
@@ -47,23 +51,12 @@ class ReviewService
             throw new InvalidArgumentException('Invalid review decision.');
         }
 
+        if ($project->status !== ProjectStatus::UnderReview) {
+            throw new InvalidArgumentException('Project is not under review.');
+        }
+
         return DB::transaction(function () use ($reviewer, $project, $decision, $notes): Review {
             $current = $project->status;
-
-            if ($current === ProjectStatus::Submitted || $current === ProjectStatus::Revision) {
-                $project->update(['status' => ProjectStatus::UnderReview]);
-
-                $this->activity->approval(
-                    $reviewer,
-                    $project,
-                    'review',
-                    $current,
-                    ProjectStatus::UnderReview,
-                    'Review started.',
-                );
-
-                $current = ProjectStatus::UnderReview;
-            }
 
             $project->update(['status' => $decision]);
 
@@ -88,6 +81,17 @@ class ReviewService
                 $decision,
                 $notes,
             );
+
+            if ($decision === ProjectStatus::Approved) {
+                $this->activity->approval(
+                    $reviewer,
+                    $project,
+                    'publish',
+                    ProjectStatus::Approved,
+                    ProjectStatus::Approved,
+                    'Document ratified and issued.',
+                );
+            }
 
             Mail::to($project->applicant)
                 ->queue(new ReviewOutcomeNotification($project, $decision, $notes));

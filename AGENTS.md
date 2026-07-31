@@ -1,50 +1,49 @@
 # AGENTS.md
 
-Laravel 13 + Inertia.js v3 + Vue 3 + TypeScript SPA (fork of the official Laravel Vue starter kit, **currently mid-migration**). Tailwind CSS v4, PHPUnit 12, PHPStan level 7.
+Laravel 13 REST API + Vue 3 + TypeScript SPA ("SIPERDO" — repo dir is `SIPDK`). PostgreSQL, Sanctum (Bearer tokens), Spatie Permission (roles/permissions), PHPUnit 12, PHPStan level 7, Tailwind CSS v4. Fork of the Laravel starter kit; **the backend API is complete and the SPA is being built out client-side** — this is no longer an Inertia/Fortify app.
 
-## Transitional state — verify before assuming
+## Architecture — verify before assuming
 
-The app is being moved from the Inertia + Fortify starter kit to a client-side SPA. `routes/web.php` is now a single catch-all (`Route::get('/{any}', fn () => view('app'))`) serving the app shell, and `vue-router` is installed. The migration is incomplete; do not assume the starter-kit architecture works:
-
-- There are **no server-side named routes** anymore — `routes/web.php` is just the catch-all and there is no `routes/settings.php`. Existing feature tests still call `route('dashboard')`/`route('login')` and will fail.
-- `laravel/fortify` and `inertiajs/inertia-laravel` are **not** in `composer.json`/`vendor`, but leftovers still reference them: `bootstrap/providers.php` lists a deleted `App\Providers\FortifyServiceProvider`; `app/Models/User.php` imports `Laravel\Fortify\*` traits (loading `User` throws `Trait "Laravel\Fortify\PasskeyAuthenticatable" not found`); `bootstrap/app.php` still appends `HandleInertiaRequests` (extends `Inertia\Middleware`) to the web group.
-- Frontend code imports `@inertiajs/vue3` and `@laravel/vite-plugin-wayfinder`, but neither is in `package.json`/`node_modules`. `npm run build`/`dev` and `npm run types:check` currently fail.
-- The wayfinder-generated helpers (`resources/js/routes/**`, `resources/js/actions/**`) are **stale** — generated against the old Fortify/Inertia route table (they export `login`, `dashboard`, `home`, etc.). They're gitignored and only regenerated when Vite runs; regenerating now drops the exports pages import (`import { dashboard } from '@/routes'`).
-- This machine's PHP lacks `pdo_sqlite`, so `php artisan test` fails locally with "could not find driver" regardless of code.
+- Backend is a REST API in `routes/api.php` (`/api/v1`, Sanctum). `routes/web.php` is only `Route::get('/{any}', fn () => view('app'))` — the SPA shell. There are **no server-rendered pages and no named web routes**; do not add routes to `web.php`.
+- All Inertia/Fortify/wayfinder starter-kit code is fully removed (no `@inertiajs/vue3`, no `laravel/wayfinder`). Don't restore it; leftover ignores in `.gitignore`/`eslint.config.js` are harmless.
+- Client routing lives in `resources/js/router/index.ts`: hash history (URLs look like `/#/dashboard`), route `meta` fields `requiresAuth`/`guest`/`roles` drive guards; layouts (`AuthLayout`/`AppLayout`) are chosen there, not in `app.ts`.
+- Auth is token-based: `resources/js/lib/api.ts` (axios, baseURL `/api/v1`) injects `Authorization: Bearer <token>` from localStorage key `siperdo_token`; a 401 clears it and redirects to `#/login`.
+- Roles: `applicant`, `reviewer`. Middleware aliases `permission:`/`role:` are registered in `bootstrap/app.php`; API routes gate on permissions (e.g. `permission:projects.submit`).
+- Server emails (password reset, review outcome) build links against `FRONTEND_URL` (`config('app.frontend_url')`), e.g. `/#/reset-password?token=...&email=...`.
 
 ## Commands
 
-- `composer dev` — runs `php artisan serve`, `php artisan queue:listen --tries=1`, and Vite together. Use this for local dev.
-- `composer setup` — full bootstrap: install deps, copy `.env`, key:generate, migrate, `npm install`, build.
-- `composer test` — `config:clear` + pint `--test` + phpstan + `php artisan test` (does not fully pass during the migration; still run before finishing).
-- `composer ci:check` — the CI suite: `npm run lint:check` + `format:check` + `types:check` + `composer test`.
-- Individual checks:
-  - PHP: `composer lint` (pint fix), `composer lint:check`, `composer types:check` (PHPStan level 7).
-  - JS: `npm run lint:check`, `npm run format:check`, `npm run types:check` (vue-tsc).
-- Single test: `php artisan test --filter <TestName>` (PHPUnit, not Pest; `phpunit.xml` already sets sqlite `:memory:`).
+- `composer dev` — `php artisan serve` + `queue:listen --tries=1` + Vite together. Use this for local dev; the queue worker is required (document-hash job and review emails are `ShouldQueue`).
+- `composer setup` — deps, copy `.env`, key:generate, `migrate --force`, npm install, build. **Does NOT seed** — run `php artisan migrate --seed` for roles + demo data.
+- `composer test` — `config:clear` + Pint `--test` + PHPStan + `php artisan test`. Requires a local PostgreSQL test DB (see below).
+- `composer ci:check` — npm `lint:check` + `format:check` + `types:check` + `composer test`. CI (`.github/workflows/tests.yml`) provisions Postgres 16, PHP 8.3, Node 22.
+- Single test: `php artisan test --filter <TestName>` (PHPUnit, not Pest).
+- PHP: `composer lint` (Pint fix), `composer lint:check`, `composer types:check` (PHPStan level 7).
+- JS: `npm run lint:check`, `npm run format:check`, `npm run types:check` (vue-tsc).
 
-## Generated code — do not hand-edit
+## Database / tests
 
-`resources/js/wayfinder/**`, `resources/js/routes/**`, and `resources/js/actions/**` are generated by the `@laravel/vite-plugin-wayfinder` vite plugin (`formVariants: true`), gitignored, and ESLint-ignored. They are only (re)generated when Vite runs, so run `npm run dev`/`npm run build` before `npm run types:check` or you'll get missing-module errors.
+- **PostgreSQL only — no SQLite.** Local DB is `siperdo`; tests use `siperdo_test` with credentials hardcoded in `phpunit.xml` (`postgres`/`postgres` on `127.0.0.1`). Create `siperdo_test` before running tests locally.
+- On this machine `php artisan test` works against the local PostgreSQL 17 service (user `postgres`, password `postgres`) with a pre-created `siperdo_test` database. All static checks (Pint, PHPStan, lint/format/types) and the full PHPUnit suite (75 tests) pass.
+- `tests/TestCase.php` seeds `RolePermissionSeeder` and offers `applicant()`/`reviewer()` helpers using `Sanctum::actingAs`; throttling is disabled in tests.
 
 ## Frontend conventions
 
 - Path alias `@/*` → `resources/js/*`.
-- UI kit: shadcn-vue/reka-ui components in `resources/js/components/ui/*`. Prefer composing these; `cn()` comes from `@/lib/utils`, icons from `@lucide/vue`, headless behavior from `@/composables`.
-- Tailwind 4: theme config lives in `resources/css/app.css` — there is no `tailwind.config.js`.
-- ESLint enforces (auto-fixable via `npm run lint`): `import/order` (alphabetical, case-insensitive), type-only imports (`consistent-type-imports`), blank lines around control statements, 1TBS braces + `curly`.
+- UI kit: shadcn-vue/reka-ui in `resources/js/components/ui/*`. Prefer composing these; `cn()` from `@/lib/utils`, icons from `@lucide/vue`.
+- Tailwind 4: no `tailwind.config.js`; tokens live in `resources/css/app.css`. API status colors (from `app/Support/StatusPresenter.php`) are safelisted there with `@source inline(...)` — add new status colors there or they get purged.
+- ESLint (auto-fix via `npm run lint`): `import/order` (alphabetical), type-only imports (`consistent-type-imports`), blank lines around control statements, 1TBS braces + `curly`.
 - Prettier: 4-space indent (2 for yml), single quotes, semicolons; runs only on `resources/`.
-- Page components live in `resources/js/pages/` (PascalCase files, subfolders like `settings/`). Page `props` types are declared in `resources/js/types/`.
-- Layouts are resolved by page name in `resources/js/app.ts` (`settings/*` → AppLayout + SettingsLayout, `auth/*` → AuthLayout, `Welcome` → none). New top-level page groups must be wired there.
+- Pages live in `resources/js/pages/` (PascalCase files); API payload types in `resources/js/types/`. Toasts via `toast()` (vue-sonner) + `getErrorMessage()` from `@/lib/api`.
 
 ## Backend conventions
 
-- The app is served by one catch-all route → `view('app')`; page routing is meant to be client-side. There are currently no `Route::inertia`/`Inertia::render` routes.
-- Server-to-client messages use `Inertia::flash('toast', ['type' => ..., 'message' => ...])`, rendered client-side via vue-sonner.
-- Validation lives in form requests under `app/Http/Requests`, one per action.
-- `HandleInertiaRequests` shares `auth.user`, `name`, and `sidebarOpen` (cookie-backed). `appearance` and `sidebar_state` cookies are excluded from encryption in `bootstrap/app.php`.
+- Form requests under `app/Http/Requests`, one per action; controllers delegate to `app/Services/*` (auth, project, review, dashboard, export); shared query logic in `app/Repositories/ProjectRepository.php`.
+- API responses use Resources (`app/Http/Resources`) with Laravel's default pagination envelope; statuses are formatted for the frontend as `{ value, label, color }` via `StatusPresenter`.
+- Exports: maatwebsite/excel (XLSX) + barryvdh/laravel-dompdf (PDF). Needs PHP extensions `zip`, `gd`/`imagick`, `mbstring`.
 
 ## Misc
 
-- Default DB is sqlite (`database/database.sqlite`); queue, cache, and sessions also use the `database` driver by default.
-- CI (`.github/workflows/tests.yml`) runs `composer setup` then `composer ci:check` on PHP 8.3 / Node 22.
+- Queue, cache, and sessions default to the `database` driver.
+- Demo accounts from seed: demo applicants & reviewers use `*@example.org` / `password` (e.g. `psaragih@example.org`).
+- Detailed API/domain docs (endpoints, ERD, approval workflow) are in `README.md`.

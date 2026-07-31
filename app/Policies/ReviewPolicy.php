@@ -8,15 +8,15 @@ use App\Models\User;
 class ReviewPolicy
 {
     /**
-     * Only reviewers and admins may create reviews.
+     * Only reviewers may create reviews.
      */
     public function create(User $user): bool
     {
-        return $user->hasAnyRole(['reviewer', 'admin']);
+        return $user->hasRole('reviewer');
     }
 
     /**
-     * Reviewers and admins may list reviews; applicants may only see reviews
+     * Reviewers may list reviews; applicants may only see reviews
      * on their own projects (scoped in the controller/repository).
      */
     public function viewAny(User $user): bool
@@ -25,11 +25,11 @@ class ReviewPolicy
     }
 
     /**
-     * Reviewers/admins see everything; owners see reviews on their projects.
+     * Reviewers see everything; owners see reviews on their projects.
      */
     public function view(User $user, Project $project): bool
     {
-        return $user->hasAnyRole(['reviewer', 'admin'])
+        return $user->hasRole('reviewer')
             || $project->applicant_id === $user->id;
     }
 }

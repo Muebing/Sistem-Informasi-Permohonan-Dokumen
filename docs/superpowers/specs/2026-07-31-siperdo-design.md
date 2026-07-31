@@ -33,7 +33,6 @@ scalability, performance, maintainability, security, clean architecture, and UX.
 
 | Role | Description |
 |---|---|
-| `admin` | Full access, user/role management |
 | `applicant` (pemohon) | Own projects: create/edit/delete (draft), upload, submit, view own history |
 | `reviewer` (penilai) | View all submissions, review (approve/reject/request revision), view all history |
 
@@ -95,7 +94,7 @@ Dashboard: `GET /api/dashboard`. Export: `GET /api/projects/export/excel`,
 
 - Sanctum token auth (Bearer). Form Request validation everywhere.
 - Policies: applicants only manage their own projects; reviewers only review.
-- Role middleware (`role:reviewer|admin`, `role:applicant`, etc.).
+- Role middleware (`role:reviewer`, `role:applicant`, etc.).
 - Upload validation: `pdf|doc|docx`, max 5 MB, unique stored filename (UUID) in Laravel Storage,
   metadata persisted. Queue-based processing.
 - Laravel defaults kept (hashed passwords, CSRF on web routes, rate limiting on auth).
@@ -126,7 +125,7 @@ Note: this machine's PHP lacks `pdo_sqlite`, so tests run against PostgreSQL.
 
 ## 11. Data Seeding
 
-Roles/permissions → admin user → 1,000 applicants + 1,000 reviewers → 10,000 projects (chunked
+Roles/permissions → 1,000 applicants + 1,000 reviewers → 10,000 projects (chunked
 factories with realistic status mix, submitted_at spread across 12 months).
 
 ## 12. Delivery

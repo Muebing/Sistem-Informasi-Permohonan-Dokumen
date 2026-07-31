@@ -3,9 +3,11 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\ProjectStatus;
+use App\Mail\ProjectSubmittedNotification;
 use App\Mail\ReviewOutcomeNotification;
 use App\Models\Project;
 use App\Models\Review;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -35,6 +37,15 @@ class ApprovalWorkflowTest extends TestCase
         $project->update(['status' => ProjectStatus::Submitted, 'submitted_at' => now()]);
 
         return $project;
+    }
+
+    /**
+     * Have a reviewer claim a submitted project (submitted -> under_review).
+     */
+    private function claim(Project $project): void
+    {
+        $this->reviewer();
+        $this->postJson("/api/v1/projects/{$project->id}/start-review")->assertOk();
     }
 
     public function test_project_cannot_be_submitted_without_documents(): void
@@ -72,6 +83,28 @@ class ApprovalWorkflowTest extends TestCase
             'project_id' => $project->id,
             'action' => 'submit',
         ]);
+    }
+
+    public function test_submit_notifies_reviewers(): void
+    {
+        Mail::fake();
+        $applicant = $this->applicant();
+        $reviewer = User::factory()->create();
+        $reviewer->assignRole('reviewer');
+
+        $project = Project::factory()->create(['applicant_id' => $applicant->id]);
+        $project->documents()->create([
+            'original_name' => 'berkas.pdf',
+            'stored_name' => 'uuid.pdf',
+            'path' => '1/uuid.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1000,
+        ]);
+
+        $this->actingAs($applicant, 'sanctum');
+        $this->postJson("/api/v1/projects/{$project->id}/submit")->assertOk();
+
+        Mail::assertQueued(ProjectSubmittedNotification::class);
     }
 
     public function test_only_owner_can_submit(): void
@@ -114,6 +147,8 @@ class ApprovalWorkflowTest extends TestCase
         $project = $this->submittedProject();
         $reviewer = $this->reviewer();
 
+        $this->postJson("/api/v1/projects/{$project->id}/start-review")->assertOk();
+
         $response = $this->postJson('/api/v1/reviews', [
             'project_id' => $project->id,
             'status' => 'approved',
@@ -138,10 +173,30 @@ class ApprovalWorkflowTest extends TestCase
         Mail::assertQueued(ReviewOutcomeNotification::class);
     }
 
+    public function test_approval_records_publish_entry_on_approve(): void
+    {
+        Mail::fake();
+        $project = $this->submittedProject();
+        $this->claim($project);
+
+        $this->postJson('/api/v1/reviews', [
+            'project_id' => $project->id,
+            'status' => 'approved',
+            'notes' => 'Dokumen lengkap dan valid.',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('approval_logs', [
+            'project_id' => $project->id,
+            'action' => 'publish',
+            'old_status' => 'approved',
+            'new_status' => 'approved',
+        ]);
+    }
+
     public function test_reviewer_can_request_revision(): void
     {
         $project = $this->submittedProject();
-        $this->reviewer();
+        $this->claim($project);
 
         $this->postJson('/api/v1/reviews', [
             'project_id' => $project->id,
@@ -155,7 +210,7 @@ class ApprovalWorkflowTest extends TestCase
     public function test_reviewer_can_reject_project(): void
     {
         $project = $this->submittedProject();
-        $this->reviewer();
+        $this->claim($project);
 
         $this->postJson('/api/v1/reviews', [
             'project_id' => $project->id,
@@ -174,19 +229,34 @@ class ApprovalWorkflowTest extends TestCase
         $this->postJson('/api/v1/reviews', [
             'project_id' => $project->id,
             'status' => 'approved',
+            'notes' => 'Tidak sah.',
         ])->assertForbidden();
     }
 
     public function test_review_requires_valid_decision(): void
     {
         $project = $this->submittedProject();
-        $this->reviewer();
+        $this->claim($project);
 
         $this->postJson('/api/v1/reviews', [
             'project_id' => $project->id,
             'status' => 'draft',
+            'notes' => 'Tidak valid.',
         ])->assertUnprocessable()
             ->assertJsonValidationErrors('status');
+    }
+
+    public function test_review_requires_notes(): void
+    {
+        $project = $this->submittedProject();
+        $this->claim($project);
+
+        $this->postJson('/api/v1/reviews', [
+            'project_id' => $project->id,
+            'status' => 'approved',
+            'notes' => '',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('notes');
     }
 
     public function test_cannot_review_project_not_awaiting_review(): void
@@ -200,14 +270,85 @@ class ApprovalWorkflowTest extends TestCase
         $this->postJson('/api/v1/reviews', [
             'project_id' => $project->id,
             'status' => 'approved',
+            'notes' => 'Tidak boleh.',
         ])->assertUnprocessable()
             ->assertJsonValidationErrors('project_id');
+    }
+
+    public function test_reviewer_cannot_decide_on_freshly_submitted_project(): void
+    {
+        $project = $this->submittedProject();
+        $this->reviewer();
+
+        $this->postJson('/api/v1/reviews', [
+            'project_id' => $project->id,
+            'status' => 'approved',
+            'notes' => 'OK.',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('project_id');
+    }
+
+    public function test_reviewer_cannot_decide_while_project_is_in_revision(): void
+    {
+        $project = $this->submittedProject();
+        $this->claim($project);
+
+        $this->postJson('/api/v1/reviews', [
+            'project_id' => $project->id,
+            'status' => 'revision',
+            'notes' => 'Perbaiki dokumen.',
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/reviews', [
+            'project_id' => $project->id,
+            'status' => 'approved',
+            'notes' => 'Mencoba menilai ulang.',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('project_id');
+    }
+
+    public function test_reviewer_cannot_start_review_on_revision_project(): void
+    {
+        $project = $this->submittedProject();
+        $this->claim($project);
+
+        $this->postJson('/api/v1/reviews', [
+            'project_id' => $project->id,
+            'status' => 'revision',
+            'notes' => 'Perbaiki dokumen.',
+        ])->assertCreated();
+
+        $this->postJson("/api/v1/projects/{$project->id}/start-review")->assertForbidden();
+    }
+
+    public function test_applicant_can_update_project_during_revision(): void
+    {
+        $project = $this->submittedProject();
+        $this->claim($project);
+
+        $this->postJson('/api/v1/reviews', [
+            'project_id' => $project->id,
+            'status' => 'revision',
+            'notes' => 'Perbaiki nama proyek.',
+        ])->assertCreated();
+
+        $applicant = $project->applicant;
+        $this->actingAs($applicant, 'sanctum');
+
+        $this->putJson("/api/v1/projects/{$project->id}", [
+            'project_name' => 'Nama Diperbaiki',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('projects', [
+            'id' => $project->id,
+            'project_name' => 'Nama Diperbaiki',
+        ]);
     }
 
     public function test_applicant_can_resubmit_after_revision(): void
     {
         $project = $this->submittedProject();
-        $this->reviewer();
+        $this->claim($project);
 
         $this->postJson('/api/v1/reviews', [
             'project_id' => $project->id,
@@ -222,7 +363,14 @@ class ApprovalWorkflowTest extends TestCase
 
         $this->postJson("/api/v1/projects/{$project->id}/submit")
             ->assertOk()
-            ->assertJsonPath('project.status.value', 'submitted');
+            ->assertJsonPath('project.status.value', 'under_review');
+
+        $this->assertDatabaseHas('approval_logs', [
+            'project_id' => $project->id,
+            'action' => 'resubmit',
+            'old_status' => 'revision',
+            'new_status' => 'under_review',
+        ]);
     }
 
     public function test_applicant_sees_reviews_on_own_project(): void
@@ -254,6 +402,8 @@ class ApprovalWorkflowTest extends TestCase
 
         $this->reviewer();
 
+        $this->postJson("/api/v1/projects/{$project->id}/start-review")->assertOk();
+
         $this->postJson('/api/v1/reviews', [
             'project_id' => $project->id,
             'status' => 'approved',
@@ -267,5 +417,6 @@ class ApprovalWorkflowTest extends TestCase
         $actions = collect($response->json('history'))->pluck('action');
         $this->assertTrue($actions->contains('submit'));
         $this->assertTrue($actions->contains('approve'));
+        $this->assertTrue($actions->contains('publish'));
     }
 }

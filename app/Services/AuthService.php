@@ -97,7 +97,7 @@ class AuthService
     private function issueToken(User $user): array
     {
         $token = $user->createToken(
-            'spa-'.($user->hasRole('reviewer') ? 'reviewer' : ($user->hasRole('admin') ? 'admin' : 'applicant')),
+            'spa-'.($user->hasRole('reviewer') ? 'reviewer' : 'applicant'),
         )->plainTextToken;
 
         return ['user' => $user, 'token' => $token];

@@ -15,7 +15,17 @@ class StoreReviewRequest extends FormRequest
         return [
             'project_id' => ['required', 'integer', 'exists:projects,id'],
             'status' => ['required', Rule::in(['approved', 'rejected', 'revision'])],
-            'notes' => ['nullable', 'string', 'max:5000'],
+            'notes' => ['required', 'string', 'max:5000'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'notes.required' => 'Every review must include notes.',
         ];
     }
 }

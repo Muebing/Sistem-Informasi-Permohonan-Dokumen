@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use App\Enums\ProjectStatus;
+use App\Mail\ProjectSubmittedNotification;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use RuntimeException;
 
 class ProjectService
@@ -66,26 +69,59 @@ class ProjectService
 
     /**
      * Submit a project for review.
+     *
+     * A first submission moves draft -> submitted; resubmitting after a
+     * revision moves revision -> under_review so the project re-enters the
+     * review process directly (per the business process diagram).
      */
     public function submit(User $user, Project $project): Project
     {
         $previous = $project->status;
 
+        if (! in_array($previous, ProjectStatus::submittableStatuses(), true)) {
+            throw new InvalidArgumentException('Project is not in a submittable status.');
+        }
+
+        $resubmission = $previous === ProjectStatus::Revision;
+
+        $newStatus = $resubmission
+            ? ProjectStatus::UnderReview
+            : ProjectStatus::Submitted;
+
         $project->update([
-            'status' => ProjectStatus::Submitted,
+            'status' => $newStatus,
             'submitted_at' => now(),
         ]);
 
         $this->activity->approval(
             $user,
             $project,
-            'submit',
+            $resubmission ? 'resubmit' : 'submit',
             $previous,
-            ProjectStatus::Submitted,
-            'Project submitted for review.',
+            $newStatus,
+            $resubmission
+                ? 'Revised project resubmitted for review.'
+                : 'Project submitted for review.',
         );
 
+        $this->notifyReviewers($project);
+
         return $project;
+    }
+
+    /**
+     * Notify reviewers that a submission awaits review.
+     */
+    private function notifyReviewers(Project $project): void
+    {
+        $recipients = User::query()
+            ->role('reviewer')
+            ->pluck('email');
+
+        if ($recipients->isNotEmpty()) {
+            Mail::to($recipients->all())
+                ->queue(new ProjectSubmittedNotification($project));
+        }
     }
 
     /**

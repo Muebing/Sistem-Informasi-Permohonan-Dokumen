@@ -157,7 +157,7 @@ class DemoDataSeeder extends Seeder
                         'project_id' => $project->id,
                         'reviewer_id' => $reviewerId,
                         'status' => $status,
-                        'notes' => fake()->optional(0.6)->sentence(12),
+                        'notes' => fake()->sentence(12),
                         'created_at' => $createdAt,
                         'updated_at' => $createdAt,
                     ];

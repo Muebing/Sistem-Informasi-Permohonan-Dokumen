@@ -40,9 +40,4 @@ abstract class TestCase extends BaseTestCase
     {
         return $this->authenticate('reviewer');
     }
-
-    protected function admin(): User
-    {
-        return $this->authenticate('admin');
-    }
 }
