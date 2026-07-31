@@ -10,6 +10,13 @@ const router = createRouter({
     routes: [
         {
             path: '/',
+            redirect: () =>
+                useAuthStore().isAuthenticated
+                    ? { name: 'dashboard' }
+                    : { name: 'login' },
+        },
+        {
+            path: '/',
             component: AuthLayout,
             meta: { guest: true },
             children: [
@@ -41,7 +48,7 @@ const router = createRouter({
             meta: { requiresAuth: true },
             children: [
                 {
-                    path: '',
+                    path: 'dashboard',
                     name: 'dashboard',
                     component: () => import('@/pages/Dashboard.vue'),
                 },
